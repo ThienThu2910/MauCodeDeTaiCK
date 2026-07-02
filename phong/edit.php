@@ -2,43 +2,33 @@
 require_once '../admin/auth.php';
 require_once '../config/db.php';
 
-$id = isset($_GET['id']) ? intval($_GET['id']) : 0;
-
-$stmt = $pdo->prepare("SELECT * FROM phong WHERE id = ?");
-$stmt->execute([$id]);
-$room = $stmt->fetch(PDO::FETCH_ASSOC);
-
-if (!$room) {
-    die("Phòng không tồn tại trên hệ thống!");
-}
-
 $error = '';
 $admin_name = isset($_SESSION['admin_name']) ? $_SESSION['admin_name'] : 'Admin';
 
-if (isset($_POST['update'])) {
+if (isset($_POST['save'])) {
     $so_phong = isset($_POST['so_phong']) ? trim($_POST['so_phong']) : '';
     $loai_phong = isset($_POST['loai_phong']) ? trim($_POST['loai_phong']) : '';
     $gia_phong = isset($_POST['gia_phong']) ? trim($_POST['gia_phong']) : '';
     $trang_thai = isset($_POST['trang_thai']) ? $_POST['trang_thai'] : 'trong';
 
-    $allowed_status = ['trong', 'da_dat'];
+    $allowed_status = ['trong', 'cho_xac_nhan'];
 
     if (empty($so_phong) || empty($loai_phong) || empty($gia_phong)) {
-        $error = "Vui lòng nhập đầy đủ thông tin!";
+        $error = "Vui lòng nhập đầy đủ các trường bắt buộc!";
     } elseif (!is_numeric($gia_phong) || $gia_phong <= 0) {
         $error = "Giá phòng phải là số lớn hơn 0!";
     } elseif (!in_array($trang_thai, $allowed_status)) {
         $error = "Trạng thái phòng không hợp lệ!";
     } else {
-        $chk = $pdo->prepare("SELECT COUNT(*) FROM phong WHERE so_phong = ? AND id != ?");
-        $chk->execute([$so_phong, $id]);
+        $chk = $pdo->prepare("SELECT COUNT(*) FROM phong WHERE so_phong = ?");
+        $chk->execute([$so_phong]);
 
         if ($chk->fetchColumn() > 0) {
-            $error = "Số phòng này đã tồn tại ở phòng khác!";
+            $error = "Số phòng này đã tồn tại, vui lòng chọn số khác!";
         }
     }
 
-    $hinh_anh = $room['hinh_anh'];
+    $hinh_anh = null;
 
     if (empty($error) && isset($_FILES['hinh_anh']) && $_FILES['hinh_anh']['error'] == UPLOAD_ERR_OK) {
         $target_dir = "../uploads/";
@@ -53,35 +43,25 @@ if (isset($_POST['update'])) {
         $file_extension = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
 
         $allowed_extensions = ['jpg', 'jpeg', 'png', 'webp'];
-        $max_size = 2 * 1024 * 1024; // 2MB
+        $max_size = 2 * 1024 * 1024;
 
         if (!in_array($file_extension, $allowed_extensions)) {
             $error = "Định dạng ảnh không hợp lệ! Chỉ nhận JPG, JPEG, PNG, WEBP.";
         } elseif ($file_size > $max_size) {
             $error = "Ảnh không được vượt quá 2MB!";
         } else {
-            $new_filename = "room_" . time() . "_" . rand(1000, 9999) . "." . $file_extension;
+            $hinh_anh = "room_" . time() . "_" . rand(1000, 9999) . "." . $file_extension;
 
-            if (move_uploaded_file($file_tmp, $target_dir . $new_filename)) {
-                if (!empty($room['hinh_anh']) && file_exists($target_dir . $room['hinh_anh'])) {
-                    unlink($target_dir . $room['hinh_anh']);
-                }
-
-                $hinh_anh = $new_filename;
-            } else {
-                $error = "Upload ảnh mới thất bại, vui lòng thử lại!";
+            if (!move_uploaded_file($file_tmp, $target_dir . $hinh_anh)) {
+                $error = "Upload ảnh thất bại, vui lòng thử lại!";
+                $hinh_anh = null;
             }
         }
     }
 
     if (empty($error)) {
-        $sql = "UPDATE phong 
-                SET so_phong = :so_phong, 
-                    loai_phong = :loai_phong, 
-                    gia_phong = :gia_phong, 
-                    trang_thai = :trang_thai, 
-                    hinh_anh = :hinh_anh 
-                WHERE id = :id";
+        $sql = "INSERT INTO phong (so_phong, loai_phong, gia_phong, trang_thai, hinh_anh) 
+                VALUES (:so_phong, :loai_phong, :gia_phong, :trang_thai, :hinh_anh)";
 
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
@@ -89,22 +69,11 @@ if (isset($_POST['update'])) {
             ':loai_phong' => $loai_phong,
             ':gia_phong' => $gia_phong,
             ':trang_thai' => $trang_thai,
-            ':hinh_anh' => $hinh_anh,
-            ':id' => $id
+            ':hinh_anh' => $hinh_anh
         ]);
 
-        header("Location: list.php?msg=edit_success");
+        header("Location: list.php?msg=add_success");
         exit();
-    }
-}
-
-$current_img = '';
-
-if (!empty($room['hinh_anh'])) {
-    if (filter_var($room['hinh_anh'], FILTER_VALIDATE_URL)) {
-        $current_img = $room['hinh_anh'];
-    } else {
-        $current_img = '../uploads/' . $room['hinh_anh'];
     }
 }
 ?>
@@ -114,7 +83,7 @@ if (!empty($room['hinh_anh'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cập Nhật Phòng - ALTF4 Admin</title>
+    <title>Thêm Phòng Mới - ALTF4 Admin</title>
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -136,11 +105,6 @@ if (!empty($room['hinh_anh'])) {
         .navbar-brand {
             letter-spacing: 0.3px;
         }
-
-        .preview-img {
-            max-height: 150px;
-            object-fit: cover;
-        }
     </style>
 </head>
 
@@ -148,7 +112,6 @@ if (!empty($room['hinh_anh'])) {
 
 <div class="admin-wrapper">
 
-    <!-- NAVBAR ADMIN -->
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
         <div class="container-fluid">
 
@@ -219,19 +182,18 @@ if (!empty($room['hinh_anh'])) {
         </div>
     </nav>
 
-    <!-- NỘI DUNG CHÍNH -->
     <div class="container">
 
         <div class="card card-main shadow-sm p-4 mb-5" style="max-width: 750px; margin: 0 auto;">
 
             <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
                 <div>
-                    <h3 class="fw-bold text-warning mb-1">
-                        <i class="bi bi-pencil-square me-2"></i>
-                        Chỉnh sửa phòng: <?= htmlspecialchars($room['so_phong']) ?>
+                    <h3 class="fw-bold text-primary mb-1">
+                        <i class="bi bi-plus-circle-fill me-2"></i>
+                        Thêm phòng mới
                     </h3>
                     <p class="text-muted mb-0">
-                        Cập nhật thông tin phòng trong hệ thống khách sạn.
+                        Nhập thông tin phòng cần thêm vào hệ thống khách sạn.
                     </p>
                 </div>
 
@@ -257,17 +219,19 @@ if (!empty($room['hinh_anh'])) {
                         name="so_phong" 
                         id="so_phong" 
                         class="form-control" 
-                        value="<?= htmlspecialchars($room['so_phong']) ?>"
+                        placeholder="Ví dụ: 105, VIP03"
+                        value="<?= isset($_POST['so_phong']) ? htmlspecialchars($_POST['so_phong']) : '' ?>"
                     >
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label fw-bold">Loại phòng <span class="text-danger">*</span></label>
                     <select name="loai_phong" id="loai_phong" class="form-select">
-                        <option value="Single" <?= $room['loai_phong'] == 'Single' ? 'selected' : '' ?>>Single Room</option>
-                        <option value="Double" <?= $room['loai_phong'] == 'Double' ? 'selected' : '' ?>>Double Room</option>
-                        <option value="Family" <?= $room['loai_phong'] == 'Family' ? 'selected' : '' ?>>Family Room</option>
-                        <option value="VIP Luxury" <?= $room['loai_phong'] == 'VIP Luxury' ? 'selected' : '' ?>>VIP Luxury Suite</option>
+                        <option value="">-- Chọn hạng phòng --</option>
+                        <option value="Single" <?= (isset($_POST['loai_phong']) && $_POST['loai_phong'] == 'Single') ? 'selected' : '' ?>>Single Room</option>
+                        <option value="Double" <?= (isset($_POST['loai_phong']) && $_POST['loai_phong'] == 'Double') ? 'selected' : '' ?>>Double Room</option>
+                        <option value="Family" <?= (isset($_POST['loai_phong']) && $_POST['loai_phong'] == 'Family') ? 'selected' : '' ?>>Family Room</option>
+                        <option value="VIP Luxury" <?= (isset($_POST['loai_phong']) && $_POST['loai_phong'] == 'VIP Luxury') ? 'selected' : '' ?>>VIP Luxury Suite</option>
                     </select>
                 </div>
 
@@ -278,57 +242,47 @@ if (!empty($room['hinh_anh'])) {
                         name="gia_phong" 
                         id="gia_phong" 
                         class="form-control" 
+                        placeholder="Ví dụ: 700000"
                         min="1"
-                        value="<?= htmlspecialchars($room['gia_phong']) ?>"
+                        value="<?= isset($_POST['gia_phong']) ? htmlspecialchars($_POST['gia_phong']) : '' ?>"
                     >
                 </div>
 
                 <div class="mb-3">
                     <label class="form-label fw-bold">Trạng thái</label>
                     <select name="trang_thai" class="form-select">
-                        <option value="trong" <?= $room['trang_thai'] == 'trong' ? 'selected' : '' ?>>Trống</option>
-                        <option value="da_dat" <?= $room['trang_thai'] == 'da_dat' ? 'selected' : '' ?>>Đang bận</option>
+                        <option value="trong" <?= (isset($_POST['trang_thai']) && $_POST['trang_thai'] == 'trong') ? 'selected' : '' ?>>
+                            Trống
+                        </option>
+                        <option value="cho_xac_nhan" <?= (isset($_POST['trang_thai']) && $_POST['trang_thai'] == 'cho_xac_nhan') ? 'selected' : '' ?>>
+                            Chờ xác nhận
+                        </option>
                     </select>
                 </div>
 
                 <div class="mb-4">
                     <label class="form-label fw-bold">Hình ảnh phòng</label>
-
-                    <div class="mb-3">
-                        <?php if (!empty($current_img)): ?>
-                            <img 
-                                src="<?= htmlspecialchars($current_img) ?>" 
-                                class="img-thumbnail preview-img" 
-                                alt="Ảnh phòng hiện tại"
-                            >
-                        <?php else: ?>
-                            <span class="text-muted small d-block">
-                                Chưa có ảnh đại diện
-                            </span>
-                        <?php endif; ?>
-                    </div>
-
                     <input 
                         type="file" 
                         name="hinh_anh" 
+                        id="hinh_anh" 
                         class="form-control" 
                         accept="image/jpeg,image/png,image/webp"
                     >
-
                     <div class="form-text">
-                        Nếu không chọn ảnh mới, hệ thống sẽ giữ ảnh hiện tại.
+                        Chỉ nhận JPG, JPEG, PNG, WEBP. Dung lượng tối đa 2MB.
                     </div>
                 </div>
 
                 <div class="d-flex justify-content-between">
                     <a href="list.php" class="btn btn-outline-secondary px-4">
-                        <i class="bi bi-x-circle me-1"></i>
-                        Hủy bỏ
+                        <i class="bi bi-arrow-left-circle me-1"></i>
+                        Quay lại
                     </a>
 
-                    <button type="submit" name="update" class="btn btn-warning px-5 fw-bold">
+                    <button type="submit" name="save" class="btn btn-primary px-5">
                         <i class="bi bi-save-fill me-1"></i>
-                        Cập nhật
+                        Lưu lại
                     </button>
                 </div>
 
