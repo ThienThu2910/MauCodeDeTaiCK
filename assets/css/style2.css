@@ -1,0 +1,41 @@
+/* ==========================================================================
+   FOOTER - HIỂN THỊ DẠNG HÌNH CHỮ NHẬT
+   ========================================================================== */
+
+.site-footer {
+    background-color: #212529 !important;
+    color: #d6d6d6 !important;
+    width: 100% !important;
+    min-height: 260px;
+    border-radius: 0 !important;
+    clip-path: none !important;
+    overflow: visible !important;
+    position: relative !important;
+    margin-top: 60px !important;
+    border-top: 1px solid rgba(212, 175, 55, 0.25) !important;
+    box-shadow: none !important;
+}
+
+.site-footer .container {
+    position: relative;
+    z-index: 1;
+}
+
+.site-footer h4,
+.site-footer h5 {
+    color: var(--gold-primary) !important;
+}
+
+.site-footer p {
+    color: #d6d6d6 !important;
+}
+
+.site-footer i {
+    color: var(--gold-primary) !important;
+}
+
+/* Chặn mọi hiệu ứng bo tròn lạ áp vào footer */
+footer {
+    border-radius: 0 !important;
+    clip-path: none !important;
+}
